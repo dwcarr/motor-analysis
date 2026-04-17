@@ -190,9 +190,9 @@ def _write_movement_plot(
         {"x": end_s - start_s, "label": "final target", "color": "#5a6675"},
     ]
     if arrival_s is not None:
-        markers.append({"x": end_s + arrival_s - start_s, "label": "arrive", "color": "#347a3a"})
+        markers.append({"x": end_s + arrival_s - start_s, "label": "arrive", "color": "#347a3a", "label_dy": 12})
     if settling_s is not None:
-        markers.append({"x": end_s + settling_s - start_s, "label": "settled", "color": "#8a5a00"})
+        markers.append({"x": end_s + settling_s - start_s, "label": "settled", "color": "#8a5a00", "label_dy": 34})
 
     panel = {
         "title": f"{axis.capitalize()} position",
@@ -267,9 +267,9 @@ def _write_shot_plot(
         peak = _finite_or_none(row[f"{axis}_peak_time_s"])
         recovery = _finite_or_none(row[f"{axis}_recovery_s"])
         if peak is not None:
-            markers.append({"x": peak, "label": f"{axis} peak", "color": _axis_color(axis)})
+            markers.append({"x": peak, "label": f"{axis} peak", "color": _axis_color(axis), "label_dy": 12})
         if recovery is not None:
-            markers.append({"x": recovery, "label": f"{axis} recovered", "color": _axis_color(axis)})
+            markers.append({"x": recovery, "label": f"{axis} recovered", "color": _axis_color(axis), "label_dy": 34})
 
     subtitle = (
         f"Pitch peak {float(row['pitch_peak_abs_deg']):.2f} deg; "
@@ -287,11 +287,11 @@ def _svg_time_series(
 ) -> str:
     width = 980
     panel_h = 230
-    top = 78
+    top = 108
     left = 70
     right = 24
     gap = 38
-    bottom = 48
+    bottom = 44
     height = top + len(panels) * panel_h + (len(panels) - 1) * gap + bottom
     plot_w = width - left - right
 
@@ -313,6 +313,18 @@ def _svg_time_series(
         f'<text class="title" x="{left}" y="28">{html.escape(title)}</text>',
         f'<text class="subtitle" x="{left}" y="50">{html.escape(subtitle)}</text>',
     ]
+
+    legend_x = left
+    legend_y = 76
+    legend_items = _legend_items(panels)
+    for item in legend_items:
+        dash = ' stroke-dasharray="6 4"' if item["dash"] else ""
+        pieces.append(
+            f'<line x1="{legend_x}" y1="{legend_y}" x2="{legend_x + 24}" y2="{legend_y}" '
+            f'stroke="{item["color"]}" stroke-width="2"{dash}/>'
+        )
+        pieces.append(f'<text class="label" x="{legend_x + 30}" y="{legend_y + 4}">{html.escape(item["label"])}</text>')
+        legend_x += max(130, len(item["label"]) * 7 + 54)
 
     x_ticks = _ticks(x_min, x_max, 7)
     for panel_idx, panel in enumerate(panels):
@@ -350,9 +362,11 @@ def _svg_time_series(
                     f'stroke="{marker["color"]}" stroke-width="1.2" opacity="0.55"/>'
                 )
                 if panel_idx == 0:
+                    label_dy = float(marker.get("label_dy", 12))
+                    label_y = y_top + label_dy
                     pieces.append(
-                        f'<text class="label" x="{x + 4:.2f}" y="{y_top + 12}" '
-                        f'transform="rotate(-35 {x + 4:.2f} {y_top + 12})">{html.escape(str(marker["label"]))}</text>'
+                        f'<text class="label" x="{x + 4:.2f}" y="{label_y:.2f}" '
+                        f'transform="rotate(-35 {x + 4:.2f} {label_y:.2f})">{html.escape(str(marker["label"]))}</text>'
                     )
         for series in series_items:
             dash = ' stroke-dasharray="6 4"' if series.get("dash") else ""
@@ -367,16 +381,6 @@ def _svg_time_series(
             f'transform="rotate(-90 18 {y_top + panel_h / 2:.2f})" text-anchor="middle">{html.escape(str(panel["ylabel"]))}</text>'
         )
 
-    legend_x = left
-    legend_y = height - 30
-    legend_items = _legend_items(panels)
-    for item in legend_items:
-        pieces.append(
-            f'<line x1="{legend_x}" y1="{legend_y}" x2="{legend_x + 24}" y2="{legend_y}" '
-            f'stroke="{item["color"]}" stroke-width="2"{" stroke-dasharray=\"6 4\"" if item["dash"] else ""}/>'
-        )
-        pieces.append(f'<text class="label" x="{legend_x + 30}" y="{legend_y + 4}">{html.escape(item["label"])}</text>')
-        legend_x += max(130, len(item["label"]) * 7 + 54)
     pieces.append(f'<text class="label" x="{left + plot_w / 2}" y="{height - 8}" text-anchor="middle">time relative to event (s)</text>')
     pieces.append("</svg>")
     return "\n".join(pieces)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import ceil, sqrt
+from math import sqrt
 from typing import Iterable
 
 import numpy as np
@@ -339,7 +339,6 @@ def _measure_episode(
             abs_error,
             tolerance,
             config.settle_hold_s,
-            current.median_dt_s,
             end_s,
         )
 
@@ -502,7 +501,6 @@ def _measure_shot_axis(
         np.abs(deviation[peak_global_idx:]),
         recovery_threshold,
         config.settle_hold_s,
-        current.median_dt_s,
         fire_time_s,
     )
 
@@ -521,17 +519,16 @@ def _first_stable_time(
     abs_error: np.ndarray,
     tolerance: float,
     hold_s: float,
-    median_dt_s: float,
     origin_s: float,
 ) -> float:
     if len(times_s) == 0:
         return np.nan
-    samples_needed = max(2, int(ceil(hold_s / median_dt_s))) if np.isfinite(median_dt_s) and median_dt_s > 0 else 2
-    if len(times_s) < samples_needed:
-        return np.nan
-    for idx in range(0, len(times_s) - samples_needed + 1):
-        if np.all(abs_error[idx : idx + samples_needed] <= tolerance):
-            return float(times_s[idx] - origin_s)
+    for idx in range(len(times_s)):
+        end_idx = int(np.searchsorted(times_s, times_s[idx] + hold_s, side="left"))
+        if end_idx >= len(times_s):
+            return np.nan
+        if np.all(abs_error[idx : end_idx + 1] <= tolerance):
+            return float(times_s[end_idx] - origin_s)
     return np.nan
 
 
