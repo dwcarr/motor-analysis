@@ -2,7 +2,22 @@
 
 This repository contains a repeatable analysis workflow for `motor.rrd`, a Rerun recording of turret motor telemetry. The goal is to make the assignment questions answerable from generated tables and reports instead of one-off manual inspection.
 
+## Key Deliverables
+
+- `outputs/summary.md`: written report with methodology, headline results, and tables.
+- `outputs/report.html`: visual companion report with scatter plots and summary tables.
+- Python source code for the analysis workflow.
+
 ## Quick Start
+
+If rebuilding the environment:
+
+```bash
+python -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+The motor.rrd file is not included in this repository, and should be copied to the root directory before running the analysis.
 
 ```bash
 .venv/bin/python scripts/analyze_motor.py --input motor.rrd --output outputs
@@ -25,16 +40,9 @@ Generated files:
 - `outputs/system_id.html`: exploratory plots for peak velocity and 90% velocity-rise time.
 - `outputs/motion_disturbance_examples.csv`: moving-target fire examples selected across starting pitch/yaw angles.
 - `outputs/motion_disturbance.html`: many time-series examples of firing disturbance while the turret is moving.
-- `outputs/yaw_10_20_diagnostic_summary.csv`: 2 degree bins for the anomalous yaw 10-20 deg movement range.
-- `outputs/yaw_10_20_diagnostics.html`: low/median/high arrival examples from each yaw 10-20 deg sub-bin.
+- `outputs/yaw_10_20_diagnostic_summary.csv`: 2 degree bins for the anomalous yaw 10-20 deg movement range. Used to justify restricting the data considered for Table 1.
+- `outputs/yaw_10_20_diagnostics.html`: low/median/high arrival examples from each yaw 10-20 deg sub-bin. Use to justify restricting the data considered for Table 1.
 - `outputs/system_id_step_summary.csv`: magnitude-bin summary of the preserved step-response subset.
-
-The existing `.venv` already has the required packages. If rebuilding the environment:
-
-```bash
-python -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-```
 
 ## What The Workflow Measures
 
@@ -51,7 +59,7 @@ For each movement episode it reports:
 - `trajectory_lag_s`: during the commanded movement, the target delay from 0 to 400 ms that best aligns the delayed target trajectory to the actual position by RMSE.
 - `overshoot_abs_deg`: amount the actual position goes beyond the final target in the movement direction.
 
-The distinction matters. For a large streamed sweep, the motor may have already followed most of the move by the final target update, so final-position arrival can be short even for a large movement. `trajectory_lag_s` is often the better control-loop delay estimate for those intervals.
+For a large streamed sweep, the motor may have already followed most of the move by the final target update, so final-position arrival can be short even for a large movement. `trajectory_lag_s` is often the better control-loop delay estimate for those intervals.
 
 The report also includes a second final-position arrival plot filtered to step-like targets only. A movement is marked `is_step_like_target=1` when the target move is dominated by one jump rather than many smaller updates. This removes ramp/sweep episodes from the arrival-latency view while preserving the original unfiltered plot for comparison. The step-only plot and system-identification subset also exclude final-position arrival below 50 ms, because those near-zero points were ruled out as invalid for this recording.
 
