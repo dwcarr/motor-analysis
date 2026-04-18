@@ -8,7 +8,7 @@ from typing import Iterable
 
 import numpy as np
 
-from .analysis import AnalysisConfig, regression_summary
+from .analysis import AnalysisConfig
 from .system_id import filter_system_id_step_rows
 
 
@@ -42,9 +42,8 @@ def write_markdown_report(
     config: AnalysisConfig,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    regressions = regression_summary(movement_rows, "arrival_latency_s") + regression_summary(
-        movement_rows, "trajectory_lag_s"
-    )
+    table_counter = {"value": 0}
+    figure_counter = {"value": 0}
 
     lines: list[str] = []
     lines.append("# Motor Control Performance Analysis")
@@ -80,24 +79,33 @@ def write_markdown_report(
     lines.append("")
     lines.append("## Key Configuration")
     lines.append("")
-    lines.append(_config_table(config))
+    lines.append(
+        _markdown_labeled_table(
+            _config_rows(config),
+            ["parameter", "value"],
+            "Analysis thresholds used for this run.",
+            table_counter,
+        )
+    )
     lines.append("")
     lines.append("## Dataset Overview")
     lines.append("")
     lines.append(
-        _markdown_table(
+        _markdown_labeled_table(
             overview_rows,
             ["path", "samples", "start_s", "end_s", "duration_s", "median_dt_s", "min_value", "max_value"],
+            "Extracted scalar streams and basic sampling/value ranges.",
+            table_counter,
         )
     )
     lines.append("")
     lines.append("## Movement Response")
     lines.append("")
-    lines.extend(_movement_findings(movement_summary, regressions))
+    lines.extend(_movement_findings(movement_summary))
     lines.extend(_step_latency_findings(movement_rows, config.system_id_min_arrival_latency_s))
     lines.append("")
     lines.append(
-        _markdown_table(
+        _markdown_labeled_table(
             movement_summary,
             [
                 "axis",
@@ -111,36 +119,23 @@ def write_markdown_report(
                 "trajectory_lag_median_s",
                 "overshoot_median_deg",
             ],
+            "Movement response summary by axis and movement magnitude bin.",
+            table_counter,
         )
     )
+    lines.append("")
+    lines.extend(_movement_summary_n_note(markdown=True))
     lines.append("")
     lines.append("### Movement Exemplars")
     lines.append("")
-    lines.extend(_markdown_exemplar_links(exemplar_rows, "movement"))
-    lines.append("")
-    lines.append("### Linearity Check")
-    lines.append("")
-    lines.append(
-        _markdown_table(
-            regressions,
-            [
-                "axis",
-                "metric",
-                "n",
-                "linear_slope_per_deg",
-                "linear_intercept",
-                "linear_r2",
-                "quadratic_r2",
-            ],
-        )
-    )
+    lines.extend(_markdown_exemplar_links(exemplar_rows, "movement", figure_counter))
     lines.append("")
     lines.append("## Shooting Impact")
     lines.append("")
     lines.extend(_shot_findings(shot_summary))
     lines.append("")
     lines.append(
-        _markdown_table(
+        _markdown_labeled_table(
             shot_summary,
             [
                 "subset",
@@ -155,12 +150,14 @@ def write_markdown_report(
                 "yaw_recovery_s_median",
                 "disturbance_vector_abs_deg_median",
             ],
+            "Fire-event disturbance summary for all shots and stable-target subsets.",
+            table_counter,
         )
     )
     lines.append("")
     lines.append("### Firing Response Exemplars")
     lines.append("")
-    lines.extend(_markdown_exemplar_links(exemplar_rows, "shot"))
+    lines.extend(_markdown_exemplar_links(exemplar_rows, "shot", figure_counter))
     lines.append("")
     lines.append("## Output Files")
     lines.append("")
@@ -194,9 +191,70 @@ def write_html_report(
     if config is None:
         config = AnalysisConfig()
     min_latency_ms = config.system_id_min_arrival_latency_s * 1000.0
+    figure_counter = {"value": 0}
+    table_counter = {"value": 0}
     path.parent.mkdir(parents=True, exist_ok=True)
-    regressions = regression_summary(movement_rows, "arrival_latency_s") + regression_summary(
-        movement_rows, "trajectory_lag_s"
+    arrival_figure = _html_labeled_figure(
+        _svg_latency_scatter(movement_rows, "arrival_latency_s", "Final-position arrival latency"),
+        "Final-position arrival latency for all detected movement episodes with finite arrival.",
+        figure_counter,
+    )
+    step_arrival_figure = _html_labeled_figure(
+        _svg_latency_scatter(
+            _system_id_step_rows(movement_rows, config.system_id_min_arrival_latency_s),
+            "arrival_latency_s",
+            "Final-position arrival latency, step targets only",
+        ),
+        f"Step-target final-position arrival after excluding ramp/sweep episodes and arrival below {min_latency_ms:.0f} ms.",
+        figure_counter,
+    )
+    trajectory_figure = _html_labeled_figure(
+        _svg_latency_scatter(movement_rows, "trajectory_lag_s", "Trajectory lag during movement"),
+        "Trajectory lag estimate across detected movement episodes.",
+        figure_counter,
+    )
+    movement_figures = _html_exemplar_figures(exemplar_rows, "movement", figure_counter)
+    shot_figures = _html_exemplar_figures(exemplar_rows, "shot", figure_counter)
+    movement_table = _html_labeled_table(
+        movement_summary,
+        [
+            "axis",
+            "magnitude_bin",
+            "episodes",
+            "arrival_n",
+            "arrival_median_s",
+            "settling_n",
+            "settling_median_s",
+            "trajectory_lag_n",
+            "trajectory_lag_median_s",
+            "overshoot_median_deg",
+        ],
+        "Movement response summary by axis and movement magnitude bin.",
+        table_counter,
+    )
+    shot_table = _html_labeled_table(
+        shot_summary,
+        [
+            "subset",
+            "n",
+            "fire_to_muzzle_s_median",
+            "fire_to_impact_s_median",
+            "pitch_peak_abs_deg_median",
+            "pitch_peak_time_s_median",
+            "pitch_recovery_s_median",
+            "yaw_peak_abs_deg_median",
+            "yaw_peak_time_s_median",
+            "yaw_recovery_s_median",
+            "disturbance_vector_abs_deg_median",
+        ],
+        "Fire-event disturbance summary for all shots and stable-target subsets.",
+        table_counter,
+    )
+    overview_table = _html_labeled_table(
+        overview_rows,
+        ["path", "samples", "duration_s", "median_dt_s", "min_value", "max_value"],
+        "Extracted scalar streams and basic sampling/value ranges.",
+        table_counter,
     )
     html_text = f"""<!doctype html>
 <html lang="en">
@@ -306,6 +364,11 @@ def write_html_report(
       font-size: 13px;
       margin-top: 8px;
     }}
+    .table-caption {{
+      color: var(--muted);
+      font-size: 13px;
+      margin: 8px 0 20px;
+    }}
     .note {{
       color: var(--muted);
       font-size: 14px;
@@ -324,24 +387,22 @@ def write_html_report(
   {_html_cards(movement_summary, shot_summary)}
   <h2>Movement Response</h2>
   <p>{html.escape("The target stream contains both discrete commands and streamed ramps. The analysis groups same-direction target changes into movement episodes, then reports final-position arrival/settling and a trajectory-lag estimate.")}</p>
-  {_svg_latency_scatter(movement_rows, "arrival_latency_s", "Final-position arrival latency")}
-  <p class="note">Each point is a movement episode with a finite final-position arrival measurement. Large moves can have short final-position arrival after the final target update because the motor has already followed most of the streamed movement.</p>
-  {_svg_latency_scatter(_system_id_step_rows(movement_rows, config.system_id_min_arrival_latency_s), "arrival_latency_s", "Final-position arrival latency, step targets only")}
-  <p class="note">This filtered view keeps only episodes where the target move is dominated by one jump and excludes final-position arrival below {min_latency_ms:.0f} ms. It removes ramp/sweep episodes and the ruled-out near-zero arrival artifacts.</p>
-  {_svg_latency_scatter(movement_rows, "trajectory_lag_s", "Trajectory lag during movement")}
+  {arrival_figure}
+  <p class="note">Large moves can have short final-position arrival after the final target update because the motor has already followed most of the streamed movement.</p>
+  {step_arrival_figure}
+  {trajectory_figure}
   <h3>Movement Exemplars</h3>
-  {_html_exemplar_figures(exemplar_rows, "movement")}
+  {movement_figures}
   <h3>Movement Summary</h3>
-  {_html_table(movement_summary, ["axis", "magnitude_bin", "episodes", "arrival_n", "arrival_median_s", "settling_n", "settling_median_s", "trajectory_lag_n", "trajectory_lag_median_s", "overshoot_median_deg"])}
-  <h3>Linearity Check</h3>
-  {_html_table(regressions, ["axis", "metric", "n", "linear_slope_per_deg", "linear_intercept", "linear_r2", "quadratic_r2"])}
+  {movement_table}
+  {_html_movement_summary_n_note()}
   <h2>Shooting Impact</h2>
   <p>{html.escape("Fire-event disturbance is measured as the change in tracking error from the pre-fire baseline. The stable-target subset is the cleanest estimate of mechanical deflection because commanded motion is near zero around the trigger.")}</p>
-  {_html_table(shot_summary, ["subset", "n", "fire_to_muzzle_s_median", "fire_to_impact_s_median", "pitch_peak_abs_deg_median", "pitch_peak_time_s_median", "pitch_recovery_s_median", "yaw_peak_abs_deg_median", "yaw_peak_time_s_median", "yaw_recovery_s_median", "disturbance_vector_abs_deg_median"])}
+  {shot_table}
   <h3>Firing Response Exemplars</h3>
-  {_html_exemplar_figures(exemplar_rows, "shot")}
+  {shot_figures}
   <h2>Dataset Overview</h2>
-  {_html_table(overview_rows, ["path", "samples", "duration_s", "median_dt_s", "min_value", "max_value"])}
+  {overview_table}
 </main>
 </body>
 </html>
@@ -351,7 +412,6 @@ def write_html_report(
 
 def _movement_findings(
     movement_summary: list[dict[str, object]],
-    regressions: list[dict[str, object]],
 ) -> list[str]:
     lines: list[str] = []
     pitch_all = _find_row(movement_summary, axis="pitch", magnitude_bin="all")
@@ -381,14 +441,6 @@ def _movement_findings(
             "- Interpretation: yaw looks faster in this recording, while its upper-tail overshoot is larger. "
             "That pattern is consistent with a more aggressive or less damped yaw loop; pitch may also be affected by elevation load, gravity, or different gearing. Treat this as a data-driven hypothesis, not proof of the mechanical cause."
         )
-
-    arrival_regressions = [row for row in regressions if row["metric"] == "arrival_latency_s"]
-    for row in arrival_regressions:
-        lines.append(
-            f"- {str(row['axis']).capitalize()} arrival latency has low linear fit strength "
-            f"(R2={_fmt(row['linear_r2'])}); this is evidence against a simple linear magnitude-latency relationship under this episode definition."
-        )
-
     return lines
 
 
@@ -559,6 +611,16 @@ def _markdown_table(rows: list[dict[str, object]], columns: list[str]) -> str:
     return "\n".join([header, sep, *body])
 
 
+def _markdown_labeled_table(
+    rows: list[dict[str, object]],
+    columns: list[str],
+    label: str,
+    counter: dict[str, int],
+) -> str:
+    counter["value"] += 1
+    return f"{_markdown_table(rows, columns)}\n\n**Table {counter['value']}.** {label}"
+
+
 def _html_table(rows: list[dict[str, object]], columns: list[str]) -> str:
     if not rows:
         return "<p>No rows.</p>"
@@ -570,7 +632,34 @@ def _html_table(rows: list[dict[str, object]], columns: list[str]) -> str:
     return f"<table><thead><tr>{head}</tr></thead><tbody>{''.join(body)}</tbody></table>"
 
 
-def _markdown_exemplar_links(rows: list[dict[str, object]], kind: str) -> list[str]:
+def _html_labeled_table(
+    rows: list[dict[str, object]],
+    columns: list[str],
+    label: str,
+    counter: dict[str, int],
+) -> str:
+    counter["value"] += 1
+    return (
+        _html_table(rows, columns)
+        + f'<p class="table-caption"><strong>Table {counter["value"]}.</strong> {html.escape(label)}</p>'
+    )
+
+
+def _html_labeled_figure(svg: str, label: str, counter: dict[str, int]) -> str:
+    counter["value"] += 1
+    return (
+        "<figure>"
+        f"{svg}"
+        f'<figcaption><strong>Figure {counter["value"]}.</strong> {html.escape(label)}</figcaption>'
+        "</figure>"
+    )
+
+
+def _markdown_exemplar_links(
+    rows: list[dict[str, object]],
+    kind: str,
+    counter: dict[str, int],
+) -> list[str]:
     selected = [row for row in rows if row["kind"] == kind]
     if not selected:
         return ["_No exemplar plots were generated._"]
@@ -581,32 +670,53 @@ def _markdown_exemplar_links(rows: list[dict[str, object]], kind: str) -> list[s
         lines.append(str(row["description"]))
         lines.append("")
         lines.append(f"![{row['label']}]({row['file']})")
+        counter["value"] += 1
+        lines.append("")
+        lines.append(f"**Figure {counter['value']}.** {row['description']}")
         lines.append("")
     return lines
 
 
-def _html_exemplar_figures(rows: list[dict[str, object]], kind: str) -> str:
+def _html_exemplar_figures(rows: list[dict[str, object]], kind: str, counter: dict[str, int]) -> str:
     selected = [row for row in rows if row["kind"] == kind]
     if not selected:
         return "<p>No exemplar plots were generated.</p>"
     figures = []
     for row in selected:
+        counter["value"] += 1
         figures.append(
             "<figure>"
             f'<img src="{html.escape(str(row["file"]))}" alt="{html.escape(str(row["label"]))}">'
-            f"<figcaption><strong>{html.escape(str(row['label']))}</strong>: "
+            f'<figcaption><strong>Figure {counter["value"]}.</strong> '
             f"{html.escape(str(row['description']))}</figcaption>"
             "</figure>"
         )
     return "".join(figures)
 
 
-def _config_table(config: AnalysisConfig) -> str:
-    rows = [
+def _config_rows(config: AnalysisConfig) -> list[dict[str, object]]:
+    return [
         {"parameter": key, "value": value}
         for key, value in config.__dict__.items()
     ]
-    return _markdown_table(rows, ["parameter", "value"])
+
+
+def _movement_summary_n_note(markdown: bool) -> list[str]:
+    text = (
+        "The `_n` fields are counts of valid finite measurements for that metric within the row's axis/bin, "
+        "not additional movement episodes. `arrival_n` counts episodes where the actual position entered the "
+        "final-target arrival band before the next target command or response-window cutoff. `settling_n` counts "
+        "episodes where the actual position stayed inside the tighter settling band continuously for the configured "
+        "50 ms hold window. `trajectory_lag_n` counts episodes with enough samples during the commanded movement to "
+        "fit a finite target-delay/RMSE estimate."
+    )
+    if markdown:
+        return [f"_{text}_"]
+    return [text]
+
+
+def _html_movement_summary_n_note() -> str:
+    return f'<p class="note">{html.escape(_movement_summary_n_note(markdown=False)[0])}</p>'
 
 
 def _find_row(rows: Iterable[dict[str, object]], **criteria: object) -> dict[str, object] | None:

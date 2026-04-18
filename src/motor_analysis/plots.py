@@ -391,7 +391,6 @@ def _starting_angle_sort_key(row: dict[str, object]) -> tuple[float, float, int]
 def _choose_shots(rows: list[dict[str, object]]) -> dict[str, dict[str, object]]:
     return {
         "not_stable": _choose_not_stable_shot(rows),
-        "stable": _choose_stable_trivial_shot(rows),
         "stable_non_trivial": _choose_stable_nontrivial_shot(rows),
     }
 
@@ -409,20 +408,6 @@ def _choose_not_stable_shot(rows: list[dict[str, object]]) -> dict[str, object]:
     vectors = np.array([float(row["disturbance_vector_abs_deg"]) for row in candidates])
     target = float(np.percentile(vectors[np.isfinite(vectors)], 90))
     return min(candidates, key=lambda row: abs(float(row["disturbance_vector_abs_deg"]) - target))
-
-
-def _choose_stable_trivial_shot(rows: list[dict[str, object]]) -> dict[str, object]:
-    candidates = [
-        row
-        for row in rows
-        if int(row["stable_target"]) == 1 and int(row["valid_disturbance_shot"]) == 0
-    ]
-    if candidates:
-        return min(candidates, key=lambda row: float(row["disturbance_vector_abs_deg"]))
-    return min(
-        [row for row in rows if int(row["stable_target"]) == 1],
-        key=lambda row: float(row["disturbance_vector_abs_deg"]),
-    )
 
 
 def _choose_stable_nontrivial_shot(rows: list[dict[str, object]]) -> dict[str, object]:
@@ -1003,7 +988,6 @@ def _shot_description(label: str, row: dict[str, object]) -> str:
 def _shot_category_label(category: str) -> str:
     labels = {
         "not_stable": "not-stable target",
-        "stable": "stable target, trivial disturbance",
         "stable_non_trivial": "stable target, non-trivial disturbance",
     }
     return labels.get(category, category.replace("_", " "))
