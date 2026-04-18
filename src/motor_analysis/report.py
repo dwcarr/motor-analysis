@@ -187,6 +187,7 @@ def write_html_report(
     shot_summary: list[dict[str, object]],
     exemplar_rows: list[dict[str, object]],
     config: AnalysisConfig | None = None,
+    observations_text: str = "",
 ) -> None:
     if config is None:
         config = AnalysisConfig()
@@ -204,6 +205,7 @@ def write_html_report(
             _system_id_step_rows(movement_rows, config.system_id_min_arrival_latency_s),
             "arrival_latency_s",
             "Final-position arrival latency, step targets only",
+            y_max_ms=330.0,
         ),
         f"Step-target final-position arrival after excluding ramp/sweep episodes and arrival below {min_latency_ms:.0f} ms.",
         figure_counter,
@@ -256,6 +258,7 @@ def write_html_report(
         "Extracted scalar streams and basic sampling/value ranges.",
         table_counter,
     )
+    observations_section = _html_observations_section(observations_text)
     html_text = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -300,6 +303,24 @@ def write_html_report(
     .lede {{
       color: var(--muted);
       max-width: 860px;
+    }}
+    .observations {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin: 24px 0 28px;
+    }}
+    .observations h2 {{
+      border-top: 0;
+      margin: 0 0 12px;
+      padding-top: 0;
+    }}
+    .observations p {{
+      margin: 0 0 12px;
+    }}
+    .observations p:last-child {{
+      margin-bottom: 0;
     }}
     .grid {{
       display: grid;
@@ -385,6 +406,7 @@ def write_html_report(
   <h1>Motor Control Performance Analysis</h1>
   <p class="lede">Generated from <code>motor.rrd</code>. The CSV files next to this report contain the full extracted measurements; this page highlights the patterns needed for the interview assignment.</p>
   {_html_cards(movement_summary, shot_summary)}
+  {observations_section}
   <h2>Movement Response</h2>
   <p>{html.escape("The target stream contains both discrete commands and streamed ramps. The analysis groups same-direction target changes into movement episodes, then reports final-position arrival/settling and a trajectory-lag estimate.")}</p>
   {arrival_figure}
@@ -524,7 +546,12 @@ def _html_cards(movement_summary: list[dict[str, object]], shot_summary: list[di
     ) + "</section>"
 
 
-def _svg_latency_scatter(rows: list[dict[str, object]], y_key: str, title: str) -> str:
+def _svg_latency_scatter(
+    rows: list[dict[str, object]],
+    y_key: str,
+    title: str,
+    y_max_ms: float | None = None,
+) -> str:
     points = [
         row
         for row in rows
@@ -546,7 +573,10 @@ def _svg_latency_scatter(rows: list[dict[str, object]], y_key: str, title: str) 
     x_values = np.array([float(row["magnitude_deg"]) for row in sampled], dtype=float)
     y_values = np.array([float(row[y_key]) * 1000.0 for row in sampled], dtype=float)
     x_min, x_max = 0.0, max(1.0, float(np.nanpercentile(x_values, 99.5)))
-    y_min, y_max = 0.0, max(1.0, float(np.nanpercentile(y_values, 99.0)))
+    y_min = 0.0
+    y_max = y_max_ms if y_max_ms is not None else max(1.0, float(np.nanpercentile(y_values, 99.0)))
+    if y_max <= y_min:
+        y_max = y_min + 1.0
     width, height = 920, 360
     left, right, top, bottom = 62, 22, 42, 48
     plot_w = width - left - right
@@ -653,6 +683,18 @@ def _html_labeled_figure(svg: str, label: str, counter: dict[str, int]) -> str:
         f'<figcaption><strong>Figure {counter["value"]}.</strong> {html.escape(label)}</figcaption>'
         "</figure>"
     )
+
+
+def _html_observations_section(observations_text: str) -> str:
+    paragraphs = [
+        paragraph.strip()
+        for paragraph in observations_text.split("\n\n")
+        if paragraph.strip()
+    ]
+    if not paragraphs:
+        return ""
+    body = "".join(f"<p>{html.escape(paragraph)}</p>" for paragraph in paragraphs)
+    return f'<section class="observations"><h2>Observations</h2>{body}</section>'
 
 
 def _markdown_exemplar_links(

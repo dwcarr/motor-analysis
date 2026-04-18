@@ -124,6 +124,7 @@ def main() -> int:
         shot_summary,
         exemplar_rows,
         config,
+        _read_optional_text(ROOT / "observations.md"),
     )
 
     print(f"Wrote analysis outputs to {output_dir.resolve()}")
@@ -139,6 +140,12 @@ def main() -> int:
     print(f"Motion disturbance page: {(output_dir / 'motion_disturbance.html').resolve()}")
     print(f"System ID page: {(output_dir / 'system_id.html').resolve()}")
     return 0
+
+
+def _read_optional_text(path: Path) -> str:
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8").strip()
 
 
 if __name__ == "__main__":
