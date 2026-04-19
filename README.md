@@ -1,11 +1,11 @@
 # 9mothers Motor Latency Analysis
 
-This repository contains a repeatable analysis workflow for `motor.rrd`, a Rerun recording of turret motor telemetry. The goal is to make the assignment questions answerable from generated tables and reports instead of one-off manual inspection.
+This repository contains a repeatable analysis workflow for `motor.rrd`, a Rerun recording of motor telemetry.
 
 ## Key Deliverables
 
-- `outputs/summary.md`: written report with methodology, headline results, and tables.
-- `outputs/report.html`: visual companion report with scatter plots and summary tables.
+- `outputs/report.html`: The main visual report with scatter plots and summary tables.
+- `outputs/summary.md`: description of the analysis methodology, headline results, and tables.
 - Python source code for the analysis workflow.
 
 ## Quick Start
@@ -133,13 +133,3 @@ The defaults are encoded in `AnalysisConfig` in `src/motor_analysis/analysis.py`
 ```
 
 Re-run the command after changing thresholds. The report records the exact configuration in `outputs/analysis_config.json` and `outputs/summary.md`.
-
-## Recommended Interview Narrative
-
-Start by explaining that the recording is not just a list of clean step commands. The target streams include long moving trajectories, so the analysis intentionally separates final-position arrival/settling from trajectory lag. That makes the system robust to both isolated steps and continuous sweeps.
-
-Then use the generated report to answer:
-
-- How latency changes with movement magnitude: cite the filtered step-response summary table and discuss linearity qualitatively from Figure 2 and `system_id.html`.
-- Pitch vs yaw differences: compare median trajectory lag, arrival, settling, and overshoot.
-- Shooting impact: use the stable-target, non-trivial-disturbance subset for the clean mechanical disturbance estimate, and mention that all-shot metrics are more confounded by target motion.
